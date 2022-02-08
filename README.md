@@ -169,40 +169,13 @@ TensorFlow Lite for Microcontrollers (shorted as TFLite Micro, TFLM) is the embe
 **Warning:** Please go through the generated file, and check that the model is defined as a \`alignas(16) const unsigned char model[]\`! We need to ensure the alignment is correct.
 
 ```
-def predict_TFLite(model, X, num_classes=10):
-    x_data = np.copy(X) # the function quantizes the input, so we must make a copy
-    # Initialize the TFLite interpreter
-    interpreter = tf.lite.Interpreter(model_content=model)
-    interpreter.allocate_tensors()
-    input_details = interpreter.get_input_details()[0]
-    output_details = interpreter.get_output_details()[0]
-    # Inputs will be quantized
-    input_scale, input_zero_point = input_details["quantization"]
-    if (input_scale, input_zero_point) != (0.0, 0):
-        x_data = x_data / input_scale + input_zero_point
-        x_data = x_data.astype(input_details["dtype"])
-    # Invoke the interpreter
-    predictions = np.empty((x_data.shape[0],num_classes), dtype=output_details["dtype"])
-    for i in range(len(x_data)):
-        interpreter.set_tensor(input_details["index"], [x_data[i]])
-        interpreter.invoke()
-        predictions[i] = np.copy(interpreter.get_tensor(output_details["index"])[0])
-    # Dequantize output
-    output_scale, output_zero_point = output_details["quantization"]
-    if (output_scale, output_zero_point) != (0.0, 0):
-        predictions = predictions.astype(np.float32)
-        predictions = (predictions - output_zero_point) * output_scale
-    # todo reshape output into array for each exit
-    return predictions
-
-def evaluate_TFLite(model, X, Y):
-    time_start = time.time()
-    predictions = predict_TFLite(model, X)
-    predictions = np.argmax(predictions,axis=-1)
-    accuracy = np.nanmean(predictions.flatten()==Y.flatten())*100
-    time_end = time.time()
-    print(f"Ellapsed time: {time_end-time_start:.3f} s for {predictions.shape[0]} samples")
-    return accuracy
+def convert_TFLite_to_TFLM(TFLite_filename, TFLM_target_filename):
+    # Read a TFLite saved model, convert it to TFLite Micro
+    # Convert to a C source file, i.e, a TensorFlow Lite for Microcontrollers model
+    !xxd -i {TFLite_filename} > {TFLM_target_filename}
+    # Update variable names
+    REPLACE_TEXT = TFLite_filename.replace('/', '_').replace('.', '_')
+    !sed -i 's/'{REPLACE_TEXT}'/g_model/g' {TFLM_target_filename}
 ```
 
 **Warning:** The following code has not been tested!
