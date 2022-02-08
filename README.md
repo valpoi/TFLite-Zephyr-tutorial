@@ -44,9 +44,9 @@ Quantize the model and fine-tune it by retraining for a few iterations. Without 
 
 ```
 model_q = tfmot.quantization.keras.quantize_model(model_q)
-# Compile model (as example, using SGD and sparse cross-entropy loss fn)
-sgd = tf.optimizers.SGD(learning_rate=1e-3,momentum=0.9,decay=1e-6,nesterov=True,)
-model_q.compile(loss='sparse_categorical_crossentropy',optimizer=sgd,metrics=tf.keras.metrics.SparseCategoricalAccuracy())
+model_q.compile(optimizer='adam',
+              loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+              metrics=['accuracy'])
 # retrain model to re-gain the accuracy lost due to quantization
 model_q.fit(train_ds,epochs=3,validation_data=test_ds,validation_freq=1)
 ```
@@ -110,10 +110,10 @@ def convert_TF_to_TFLite(model_tf, X_train, TFLite_target_filename):
     converter.inference_output_type = tf.int8
     # Provide a representative dataset to optimize quantization with respect to expected data distribution
     def generate_representative_dataset():
-        for i in range(len(X_train)):
-            yield([np.float32(X_train[i]).reshape(1, len(X_train[0]))])
+        for i in range(len(X_train)//10):
+            yield([np.float32(X_train[i]).reshape(1, X_train[0].size)])
     # Converter will use the above function to optimize quantization
-    converter.representative_dataset = representative_dataset
+    converter.representative_dataset = generate_representative_dataset
     #convert to TFLite
     model_tflite = converter.convert()
     open(TFLite_target_filename, "wb").write(model_tflite)
@@ -127,7 +127,7 @@ TFLite models do not provide the same API as Keras models: you cannot use .predi
 Note: X is a numpy matrix
 
 ```
-def predict_TFLite(model, X):
+def predict_TFLite(model, X, num_classes=10):
     x_data = np.copy(X) # the function quantizes the input, so we must make a copy
     # Initialize the TFLite interpreter
     interpreter = tf.lite.Interpreter(model_content=model)
@@ -140,11 +140,11 @@ def predict_TFLite(model, X):
         x_data = x_data / input_scale + input_zero_point
         x_data = x_data.astype(input_details["dtype"])
     # Invoke the interpreter
-    predictions = np.empty(x_data.size, dtype=output_details["dtype"])
+    predictions = np.empty((x_data.shape[0],num_classes), dtype=output_details["dtype"])
     for i in range(len(x_data)):
         interpreter.set_tensor(input_details["index"], [x_data[i]])
         interpreter.invoke()
-        predictions[i] = interpreter.get_tensor(output_details["index"])[0]
+        predictions[i] = np.copy(interpreter.get_tensor(output_details["index"])[0])
     # Dequantize output
     output_scale, output_zero_point = output_details["quantization"]
     if (output_scale, output_zero_point) != (0.0, 0):
@@ -152,6 +152,12 @@ def predict_TFLite(model, X):
         predictions = (predictions - output_zero_point) * output_scale
     # todo reshape output into array for each exit
     return predictions
+
+def evaluate_TFLite(model, X, Y):
+    predictions = predict_TFLite(model, X)
+    predictions = np.argmax(predictions,axis=-1)
+    accuracy = np.nanmean(predictions.flatten()==Y.flatten())*100
+    return accuracy
 ```
 
 ##### 4. TFLite to TFLite Micro
@@ -163,16 +169,40 @@ TensorFlow Lite for Microcontrollers (shorted as TFLite Micro, TFLM) is the embe
 **Warning:** Please go through the generated file, and check that the model is defined as a \`alignas(16) const unsigned char model[]\`! We need to ensure the alignment is correct.
 
 ```
-def convert_TFLite_to_TFLM(TFLite_filename, TFLM_target_filename):
-    # Read a TFLite saved model, convert it to TFLite Micro
-    # save TFLite model
-    TFLite_target = f"{TFLM_target_filename}_tflite"
-    open(TFLite_target, "wb").write(model_tflite)
-    # Convert to a C source file, i.e, a TensorFlow Lite for Microcontrollers model
-    !xxd -i {TFLite_target} > {TFLM_target_filename}
-    # Update variable names
-    REPLACE_TEXT = TFLite_target.replace('/', '_').replace('.', '_')
-    !sed -i 's/'{REPLACE_TEXT}'/g_model/g' {TFLM_target_filename}
+def predict_TFLite(model, X, num_classes=10):
+    x_data = np.copy(X) # the function quantizes the input, so we must make a copy
+    # Initialize the TFLite interpreter
+    interpreter = tf.lite.Interpreter(model_content=model)
+    interpreter.allocate_tensors()
+    input_details = interpreter.get_input_details()[0]
+    output_details = interpreter.get_output_details()[0]
+    # Inputs will be quantized
+    input_scale, input_zero_point = input_details["quantization"]
+    if (input_scale, input_zero_point) != (0.0, 0):
+        x_data = x_data / input_scale + input_zero_point
+        x_data = x_data.astype(input_details["dtype"])
+    # Invoke the interpreter
+    predictions = np.empty((x_data.shape[0],num_classes), dtype=output_details["dtype"])
+    for i in range(len(x_data)):
+        interpreter.set_tensor(input_details["index"], [x_data[i]])
+        interpreter.invoke()
+        predictions[i] = np.copy(interpreter.get_tensor(output_details["index"])[0])
+    # Dequantize output
+    output_scale, output_zero_point = output_details["quantization"]
+    if (output_scale, output_zero_point) != (0.0, 0):
+        predictions = predictions.astype(np.float32)
+        predictions = (predictions - output_zero_point) * output_scale
+    # todo reshape output into array for each exit
+    return predictions
+
+def evaluate_TFLite(model, X, Y):
+    time_start = time.time()
+    predictions = predict_TFLite(model, X)
+    predictions = np.argmax(predictions,axis=-1)
+    accuracy = np.nanmean(predictions.flatten()==Y.flatten())*100
+    time_end = time.time()
+    print(f"Ellapsed time: {time_end-time_start:.3f} s for {predictions.shape[0]} samples")
+    return accuracy
 ```
 
 **Warning:** The following code has not been tested!
