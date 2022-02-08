@@ -1,5 +1,7 @@
 # How to Use Tensorflow Lite for Microcontrollers
 
+Tested on Python 3.8, tensorflow 2.8rc0, tensorflow-model-optimization 0.7.0
+
 ### Install the requirements
 
 Download and install Tensorflow and Tensorflow Lite
