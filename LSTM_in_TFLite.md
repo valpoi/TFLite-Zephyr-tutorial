@@ -22,18 +22,18 @@ Version without quantization, all weights are tf.float32:
 def convert_LSTM_to_float_TFLite(model_tf, TFLite_target_filename, batch_size=1):
     # We need to clearly set the input signature of the Keras model
     # As of now, only one dimension can be dynamic. We must fix the batch size
-    input_signature = model.layers[0].input_shape
+    input_signature = model_tf.layers[0].input_shape
     input_signature = (batch_size,) + input_signature[:1]
     if np.sum(np.array(input_signature)==None)!=1:
         print(f"Signature {input_signature} mus have at most one None!")
         raise Exception
     
     # Create a lambda function of the model
-    run_model = tf.function(lambda x: model(x))
+    run_model = tf.function(lambda x: model_tf(x))
     # Create a concrete_function signature for the model
     # We specify a input signature where only the sequence is dynamic, the batch size is fixed
     concrete_func = run_model.get_concrete_function(
-        tf.TensorSpec([BATCH_SIZE, None, N_STEPS, N_FEATURES],model.inputs[0].dtype))
+        tf.TensorSpec([BATCH_SIZE, None, N_STEPS, N_FEATURES],model_tf.inputs[0].dtype))
     # We must save the model with the signature on disk
     MODEL_DIR = "temp_model_to_convert"
     model.save(MODEL_DIR, save_format="tf", signatures=concrete_func)
@@ -63,18 +63,18 @@ Version with quantization, weights, inputs and outputs are tf.int8:
 def convert_LSTM_to_float_TFLite(model_tf, TFLite_target_filename,  X_train, batch_size=1):
     # We need to clearly set the input signature of the Keras model
     # As of now, only one dimension can be dynamic. We must fix the batch size
-    input_signature = model.layers[0].input_shape
+    input_signature = model_tf.layers[0].input_shape
     input_signature = (batch_size,) + input_signature[:1]
     if np.sum(np.array(input_signature)==None)!=1:
         print(f"Signature {input_signature} mus have at most one None!")
         raise Exception
     
     # Create a lambda function of the model
-    run_model = tf.function(lambda x: model(x))
+    run_model = tf.function(lambda x: model_tf(x))
     # Create a concrete_function signature for the model
     # We specify a input signature where only the sequence is dynamic, the batch size is fixed
     concrete_func = run_model.get_concrete_function(
-        tf.TensorSpec([BATCH_SIZE, None, N_STEPS, N_FEATURES],model.inputs[0].dtype))
+        tf.TensorSpec([BATCH_SIZE, None, N_STEPS, N_FEATURES],model_tf.inputs[0].dtype))
     # We must save the model with the signature on disk
     MODEL_DIR = "temp_model_to_convert"
     model.save(MODEL_DIR, save_format="tf", signatures=concrete_func)
