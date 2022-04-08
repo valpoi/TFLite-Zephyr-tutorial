@@ -99,7 +99,7 @@ def convert_LSTM_to_float_TFLite(model_tf, TFLite_target_filename,  X_train, bat
     open(TFLite_target_filename, "wb").write(model_tflite)
     print(f"TFLite model size: {os.path.getsize(TFLite_target_filename)}")
     return model_tflite
-
+```
 
 Predict function, takes into input a string representing the model path, and a list X, where each element of X is a input sample
 
@@ -139,6 +139,6 @@ def predict_TFLite(model, X):
         outputs = (outputs - output_zero_point) * output_scale
     # todo reshape output into array for each exit
     return outputs
-
+```
 
 
