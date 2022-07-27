@@ -256,6 +256,11 @@ cmake PATH_TO_TFLM/tensorflow/lite/micro/tools/make
 # For MacOS
 brew install gmake
 gmake PATH_TO_TFLM/tensorflow/lite/micro/tools/make
+git clone https://www.github.com/tensorflow/tflite-micro.git
+cd tflite-micro
+gmake -f tensorflow/lite/micro/tools/make/Makefile TARGET=cortex_m_generic TARGET_ARCH=cortex-m4 third_party_downloads
+gmake -f tensorflow/lite/micro/tools/make/Makefile TARGET=cortex_m_generic TARGET_ARCH=cortex-m4 microlite
+
 ```
 
 This might take time.
